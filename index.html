@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Maze</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>Dynamic Maze</h1>
+            <div class="stats">
+                <div class="timer">Time: <span id="time">60</span>s</div>
+                <div class="level">Level: <span id="level">1</span></div>
+            </div>
+        </div>
+        
+        <div id="game-board"></div>
+        
+        <div class="controls">
+            <div class="instructions">
+                <p>Use arrow keys or WASD to move. Reach the exit before time runs out!</p>
+                <p>Beware of the pursuing AI and the shifting maze walls.</p>
+            </div>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+    
+    <div id="game-over" class="modal">
+        <div class="modal-content">
+            <h2>Game Over!</h2>
+            <p id="game-over-message"></p>
+            <button id="restart-button">Play Again</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
