@@ -28,7 +28,9 @@ let gameState = {
     isGameOver: false,
     timerInterval: null,
     lastShiftTime: 0,
-    movesSinceLastShift: 0
+    movesSinceLastShift: 0,
+    animationTimeouts: [], // Track animation timeouts to clear them if needed
+    maxAnimationsPerShift: 50 // Limit animations to prevent performance issues
 };
 
 // DOM Elements
@@ -105,12 +107,18 @@ function getTimeForLevel(level) {
 function startGame() {
     if (gameState.isGameStarted) return;
     
+    // Clear any existing animations and intervals
+    clearAllAnimations();
+    clearInterval(gameState.timerInterval);
+    
     gameState.isGameStarted = true;
     gameState.isGameOver = false;
     gameState.level = 1;
     gameState.time = getTimeForLevel(1); // Use the getTimeForLevel function
     gameState.score = 0;
     gameState.movesSinceLastShift = 0;
+    gameState.lastShiftTime = 0;
+    gameState.animationTimeouts = [];
     
     updateDisplay();
     generateMaze();
@@ -123,7 +131,11 @@ function startGame() {
 // Restart the game
 function restartGame() {
     gameOverModal.classList.remove('active');
-    startGame();
+    
+    // Add a small delay before starting to ensure UI updates complete
+    setTimeout(() => {
+        startGame();
+    }, 50);
 }
 
 // Update the display with current game state
@@ -538,6 +550,12 @@ function moveEnemy() {
 
 // Shift parts of the maze randomly
 function shiftMaze() {
+    // Prevent too many shifts happening too quickly
+    const now = Date.now();
+    if (now - gameState.lastShiftTime < 300) {
+        return; // Don't shift if the last shift was less than 300ms ago
+    }
+    
     // Play shift sound
     playSound(shiftSound);
     
@@ -566,6 +584,9 @@ function shiftMaze() {
     
     // Ensure there's still a path to the exit after shifting
     createPathToExit();
+    
+    // Update the last shift time
+    gameState.lastShiftTime = now;
 }
 
 // Performs the wall-flipping behavior with more intensity
@@ -577,8 +598,10 @@ function performWallFlips() {
         // Pick a random location (not on player, enemy, or exit)
         let row, col;
         let validLocation = false;
+        let attempts = 0;
         
-        while (!validLocation) {
+        while (!validLocation && attempts < 30) { // Prevent potential infinite loop
+            attempts++;
             row = Math.floor(Math.random() * (config.gridSize.height - 2)) + 1;
             col = Math.floor(Math.random() * (config.gridSize.width - 2)) + 1;
             
@@ -590,27 +613,20 @@ function performWallFlips() {
             validLocation = !isPlayer && !isEnemy && !isExit && !isObstacle;
         }
         
+        // Skip if we couldn't find a valid location after many attempts
+        if (!validLocation) continue;
+        
         // Toggle between wall and path
         const cell = getCellElement(row, col);
         
         if (gameState.grid[row][col] === 'wall') {
             gameState.grid[row][col] = 'path';
             cell.classList.remove('wall');
-            cell.classList.add('wall-shifting');
-            
-            // Remove animation class after animation completes
-            setTimeout(() => {
-                cell.classList.remove('wall-shifting');
-            }, 500);
+            addCellAnimation(cell, 'wall-shifting', 500);
         } else if (gameState.grid[row][col] === 'path') {
             gameState.grid[row][col] = 'wall';
             cell.classList.add('wall');
-            cell.classList.add('wall-shifting');
-            
-            // Remove animation class after animation completes
-            setTimeout(() => {
-                cell.classList.remove('wall-shifting');
-            }, 500);
+            addCellAnimation(cell, 'wall-shifting', 500);
         }
     }
 }
@@ -620,9 +636,12 @@ function performMajorShift() {
     // Choose a quadrant to remodel (avoid player, enemy, exit areas)
     let quadrantX, quadrantY;
     let validQuadrant = false;
+    let quadrantAttempts = 0;
     
     // Keep trying until we find a valid quadrant 
-    while (!validQuadrant) {
+    while (!validQuadrant && quadrantAttempts < 10) { // Limit attempts
+        quadrantAttempts++;
+        
         // Randomly select a quadrant
         quadrantX = Math.random() < 0.5 ? 0 : 1;
         quadrantY = Math.random() < 0.5 ? 0 : 1;
@@ -649,6 +668,12 @@ function performMajorShift() {
         validQuadrant = !playerInQuadrant && !enemyInQuadrant && !exitInQuadrant;
     }
     
+    // If no valid quadrant found after attempts, fall back to wall flips
+    if (!validQuadrant) {
+        performWallFlips();
+        return;
+    }
+    
     // Calculate quadrant boundaries
     const startRow = quadrantY === 0 ? 1 : Math.floor(config.gridSize.height / 2);
     const endRow = quadrantY === 0 ? Math.floor(config.gridSize.height / 2) : config.gridSize.height - 1;
@@ -657,6 +682,9 @@ function performMajorShift() {
     
     // Choose a pattern for this quadrant (0: checkerboard, 1: zigzag, 2: spiral)
     const pattern = Math.floor(Math.random() * 3);
+    
+    // Limit the number of cells we'll animate to prevent performance issues
+    let animationCount = 0;
     
     // Apply the pattern to the quadrant
     for (let row = startRow; row < endRow; row++) {
@@ -696,12 +724,11 @@ function performMajorShift() {
                     cell.classList.remove('wall');
                 }
                 
-                cell.classList.add('wall-shifting');
-                
-                // Remove animation class after animation completes
-                setTimeout(() => {
-                    cell.classList.remove('wall-shifting');
-                }, 500);
+                // Only animate if we haven't hit the animation limit
+                if (animationCount < gameState.maxAnimationsPerShift) {
+                    addCellAnimation(cell, 'wall-shifting', 500);
+                    animationCount++;
+                }
             }
         }
     }
@@ -990,6 +1017,9 @@ function endGame(message) {
     gameState.isGameOver = true;
     gameState.isGameStarted = false;
     
+    // Clear any ongoing animations
+    clearAllAnimations();
+    
     // Remove game over sound
     // playSound(gameOverSound);
     
@@ -1191,6 +1221,40 @@ function isTouchDevice() {
     return (('ontouchstart' in window) ||
            (navigator.maxTouchPoints > 0) ||
            (navigator.msMaxTouchPoints > 0));
+}
+
+// Helper function to add animation with performance safeguards
+function addCellAnimation(cell, className, duration) {
+    // Limit number of animations
+    if (gameState.animationTimeouts.length >= gameState.maxAnimationsPerShift) {
+        return; // Skip animation if too many are already running
+    }
+    
+    cell.classList.add(className);
+    
+    // Add timeout to array so we can clear it if game ends
+    const timeoutId = setTimeout(() => {
+        cell.classList.remove(className);
+        // Remove this timeout from the array
+        const index = gameState.animationTimeouts.indexOf(timeoutId);
+        if (index > -1) {
+            gameState.animationTimeouts.splice(index, 1);
+        }
+    }, duration);
+    
+    gameState.animationTimeouts.push(timeoutId);
+}
+
+// Clear all animation timeouts
+function clearAllAnimations() {
+    gameState.animationTimeouts.forEach(id => clearTimeout(id));
+    gameState.animationTimeouts = [];
+    
+    // Remove animation classes from all cells
+    const cells = document.querySelectorAll('.wall-shifting');
+    cells.forEach(cell => {
+        cell.classList.remove('wall-shifting');
+    });
 }
 
 // Initialize the game when the page loads
