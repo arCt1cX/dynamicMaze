@@ -29,8 +29,7 @@ let gameState = {
     timerInterval: null,
     lastShiftTime: 0,
     movesSinceLastShift: 0,
-    animationTimeouts: [], // Track animation timeouts to clear them if needed
-    maxAnimationsPerShift: 50 // Limit animations to prevent performance issues
+    animationTimeouts: [] // Track timeouts to prevent memory leaks
 };
 
 // DOM Elements
@@ -103,13 +102,42 @@ function getTimeForLevel(level) {
     return Math.min(config.initialTime + extraTime, 60);
 }
 
+// Safer animation helper - won't affect game mechanics but helps prevent memory leaks
+function safeAddAnimation(element, className, duration) {
+    element.classList.add(className);
+    
+    // Create timeout and track it
+    const timeoutId = setTimeout(() => {
+        element.classList.remove(className);
+        
+        // Remove from tracking array
+        const index = gameState.animationTimeouts.indexOf(timeoutId);
+        if (index > -1) {
+            gameState.animationTimeouts.splice(index, 1);
+        }
+    }, duration);
+    
+    // Only keep the last 100 timeouts to prevent memory issues
+    gameState.animationTimeouts.push(timeoutId);
+    if (gameState.animationTimeouts.length > 100) {
+        const oldTimeout = gameState.animationTimeouts.shift();
+        clearTimeout(oldTimeout);
+    }
+}
+
+// Clean up function to clear timeouts
+function cleanupAnimations() {
+    gameState.animationTimeouts.forEach(id => clearTimeout(id));
+    gameState.animationTimeouts = [];
+}
+
 // Start the game
 function startGame() {
     if (gameState.isGameStarted) return;
     
-    // Clear any existing animations and intervals
-    clearAllAnimations();
+    // Clear any existing intervals and animations
     clearInterval(gameState.timerInterval);
+    cleanupAnimations();
     
     gameState.isGameStarted = true;
     gameState.isGameOver = false;
@@ -550,20 +578,22 @@ function moveEnemy() {
 
 // Shift parts of the maze randomly
 function shiftMaze() {
-    // Prevent too many shifts happening too quickly
-    const now = Date.now();
-    if (now - gameState.lastShiftTime < 300) {
-        return; // Don't shift if the last shift was less than 300ms ago
-    }
-    
     // Play shift sound
     playSound(shiftSound);
     
     // Add a more dramatic visual flash effect to the game board
     gameBoard.classList.add('flash');
-    setTimeout(() => {
+    
+    // Use our safe animation system
+    const flashTimeoutId = setTimeout(() => {
         gameBoard.classList.remove('flash');
     }, 500);
+    
+    gameState.animationTimeouts.push(flashTimeoutId);
+    if (gameState.animationTimeouts.length > 100) {
+        const oldTimeout = gameState.animationTimeouts.shift();
+        clearTimeout(oldTimeout);
+    }
     
     // Choose a shift type based on level and randomness
     const shiftType = Math.random();
@@ -586,7 +616,7 @@ function shiftMaze() {
     createPathToExit();
     
     // Update the last shift time
-    gameState.lastShiftTime = now;
+    gameState.lastShiftTime = Date.now();
 }
 
 // Performs the wall-flipping behavior with more intensity
@@ -598,10 +628,8 @@ function performWallFlips() {
         // Pick a random location (not on player, enemy, or exit)
         let row, col;
         let validLocation = false;
-        let attempts = 0;
         
-        while (!validLocation && attempts < 30) { // Prevent potential infinite loop
-            attempts++;
+        while (!validLocation) {
             row = Math.floor(Math.random() * (config.gridSize.height - 2)) + 1;
             col = Math.floor(Math.random() * (config.gridSize.width - 2)) + 1;
             
@@ -613,20 +641,17 @@ function performWallFlips() {
             validLocation = !isPlayer && !isEnemy && !isExit && !isObstacle;
         }
         
-        // Skip if we couldn't find a valid location after many attempts
-        if (!validLocation) continue;
-        
         // Toggle between wall and path
         const cell = getCellElement(row, col);
         
         if (gameState.grid[row][col] === 'wall') {
             gameState.grid[row][col] = 'path';
             cell.classList.remove('wall');
-            addCellAnimation(cell, 'wall-shifting', 500);
+            safeAddAnimation(cell, 'wall-shifting', 500);
         } else if (gameState.grid[row][col] === 'path') {
             gameState.grid[row][col] = 'wall';
             cell.classList.add('wall');
-            addCellAnimation(cell, 'wall-shifting', 500);
+            safeAddAnimation(cell, 'wall-shifting', 500);
         }
     }
 }
@@ -636,12 +661,11 @@ function performMajorShift() {
     // Choose a quadrant to remodel (avoid player, enemy, exit areas)
     let quadrantX, quadrantY;
     let validQuadrant = false;
-    let quadrantAttempts = 0;
+    let attempts = 0;
     
-    // Keep trying until we find a valid quadrant 
-    while (!validQuadrant && quadrantAttempts < 10) { // Limit attempts
-        quadrantAttempts++;
-        
+    // Keep trying until we find a valid quadrant, with maximum attempts
+    while (!validQuadrant && attempts < 20) {
+        attempts++;
         // Randomly select a quadrant
         quadrantX = Math.random() < 0.5 ? 0 : 1;
         quadrantY = Math.random() < 0.5 ? 0 : 1;
@@ -668,7 +692,7 @@ function performMajorShift() {
         validQuadrant = !playerInQuadrant && !enemyInQuadrant && !exitInQuadrant;
     }
     
-    // If no valid quadrant found after attempts, fall back to wall flips
+    // If no valid quadrant found after max attempts, fall back to wall flips
     if (!validQuadrant) {
         performWallFlips();
         return;
@@ -683,8 +707,9 @@ function performMajorShift() {
     // Choose a pattern for this quadrant (0: checkerboard, 1: zigzag, 2: spiral)
     const pattern = Math.floor(Math.random() * 3);
     
-    // Limit the number of cells we'll animate to prevent performance issues
+    // Count animations to limit them
     let animationCount = 0;
+    const maxAnimations = 40; // Limit the number of animations per major shift
     
     // Apply the pattern to the quadrant
     for (let row = startRow; row < endRow; row++) {
@@ -724,9 +749,9 @@ function performMajorShift() {
                     cell.classList.remove('wall');
                 }
                 
-                // Only animate if we haven't hit the animation limit
-                if (animationCount < gameState.maxAnimationsPerShift) {
-                    addCellAnimation(cell, 'wall-shifting', 500);
+                // Limit animations to prevent memory issues
+                if (animationCount < maxAnimations) {
+                    safeAddAnimation(cell, 'wall-shifting', 500);
                     animationCount++;
                 }
             }
@@ -813,6 +838,10 @@ function shiftCorridor() {
             }
         }
         
+        // Count animations to limit them
+        let animationCount = 0;
+        const maxAnimations = 40; // Limit animations per corridor shift
+        
         // Apply the shift
         for (let i = 0; i < originalCells.length; i++) {
             const cell = originalCells[i];
@@ -838,11 +867,11 @@ function shiftCorridor() {
                 domCell.className = 'cell';
                 if (cell.type === 'wall') domCell.classList.add('wall');
                 
-                // Add shifting animation
-                domCell.classList.add('wall-shifting');
-                setTimeout(() => {
-                    domCell.classList.remove('wall-shifting');
-                }, 500);
+                // Add shifting animation (limited)
+                if (animationCount < maxAnimations) {
+                    safeAddAnimation(domCell, 'wall-shifting', 500);
+                    animationCount++;
+                }
             } else {
                 newPos = (cell.row + shiftDirection * shiftDistance) % (config.gridSize.height - 2);
                 if (newPos <= 0) newPos = config.gridSize.height - 2 + newPos;
@@ -859,11 +888,11 @@ function shiftCorridor() {
                 domCell.className = 'cell';
                 if (cell.type === 'wall') domCell.classList.add('wall');
                 
-                // Add shifting animation
-                domCell.classList.add('wall-shifting');
-                setTimeout(() => {
-                    domCell.classList.remove('wall-shifting');
-                }, 500);
+                // Add shifting animation (limited)
+                if (animationCount < maxAnimations) {
+                    safeAddAnimation(domCell, 'wall-shifting', 500);
+                    animationCount++;
+                }
             }
         }
     }
@@ -876,6 +905,10 @@ function addRandomObstacles() {
     
     // Decide if we're making a dramatic pattern (more likely in higher levels)
     const dramaticPattern = Math.random() < 0.3 + (gameState.level * 0.03);
+    
+    // Count animations to limit them
+    let animationCount = 0;
+    const maxAnimations = 40; // Limit animations for obstacle changes
     
     if (dramaticPattern) {
         // Create a dramatic pattern (line of obstacles or line of paths)
@@ -913,14 +946,12 @@ function addRandomObstacles() {
                     cell.className = 'cell';
                 }
                 
-                // Add animation
+                // Add animation (limited)
                 const cell = getCellElement(row, col);
-                cell.classList.add('wall-shifting');
-                
-                // Remove animation class after animation completes
-                setTimeout(() => {
-                    cell.classList.remove('wall-shifting');
-                }, 500);
+                if (animationCount < maxAnimations) {
+                    safeAddAnimation(cell, 'wall-shifting', 500);
+                    animationCount++;
+                }
             }
         }
     } else {
@@ -947,12 +978,12 @@ function addRandomObstacles() {
                 gameState.grid[row][col] = 'obstacle';
                 const cell = getCellElement(row, col);
                 cell.className = 'cell obstacle';
-                cell.classList.add('wall-shifting');
                 
-                // Remove animation class after animation completes
-                setTimeout(() => {
-                    cell.classList.remove('wall-shifting');
-                }, 500);
+                // Add animation (limited)
+                if (animationCount < maxAnimations) {
+                    safeAddAnimation(cell, 'wall-shifting', 500);
+                    animationCount++;
+                }
             } else {
                 // Create a larger path (clear a larger area in a plus shape)
                 const pathSize = Math.random() < 0.5 ? 2 : 3; // 2-3 cell radius
@@ -975,12 +1006,12 @@ function addRandomObstacles() {
                                     gameState.grid[newRow][newCol] = 'path';
                                     const cell = getCellElement(newRow, newCol);
                                     cell.className = 'cell';
-                                    cell.classList.add('wall-shifting');
                                     
-                                    // Remove animation class after animation completes
-                                    setTimeout(() => {
-                                        cell.classList.remove('wall-shifting');
-                                    }, 500);
+                                    // Add animation (limited)
+                                    if (animationCount < maxAnimations) {
+                                        safeAddAnimation(cell, 'wall-shifting', 500);
+                                        animationCount++;
+                                    }
                                 }
                             }
                         }
@@ -1014,14 +1045,9 @@ function levelComplete() {
 // End the game
 function endGame(message) {
     clearInterval(gameState.timerInterval);
+    cleanupAnimations(); // Clean up animations
     gameState.isGameOver = true;
     gameState.isGameStarted = false;
-    
-    // Clear any ongoing animations
-    clearAllAnimations();
-    
-    // Remove game over sound
-    // playSound(gameOverSound);
     
     gameOverMessage.textContent = message + ` You reached level ${gameState.level}.`;
     finalScoreDisplay.textContent = gameState.score;
@@ -1221,40 +1247,6 @@ function isTouchDevice() {
     return (('ontouchstart' in window) ||
            (navigator.maxTouchPoints > 0) ||
            (navigator.msMaxTouchPoints > 0));
-}
-
-// Helper function to add animation with performance safeguards
-function addCellAnimation(cell, className, duration) {
-    // Limit number of animations
-    if (gameState.animationTimeouts.length >= gameState.maxAnimationsPerShift) {
-        return; // Skip animation if too many are already running
-    }
-    
-    cell.classList.add(className);
-    
-    // Add timeout to array so we can clear it if game ends
-    const timeoutId = setTimeout(() => {
-        cell.classList.remove(className);
-        // Remove this timeout from the array
-        const index = gameState.animationTimeouts.indexOf(timeoutId);
-        if (index > -1) {
-            gameState.animationTimeouts.splice(index, 1);
-        }
-    }, duration);
-    
-    gameState.animationTimeouts.push(timeoutId);
-}
-
-// Clear all animation timeouts
-function clearAllAnimations() {
-    gameState.animationTimeouts.forEach(id => clearTimeout(id));
-    gameState.animationTimeouts = [];
-    
-    // Remove animation classes from all cells
-    const cells = document.querySelectorAll('.wall-shifting');
-    cells.forEach(cell => {
-        cell.classList.remove('wall-shifting');
-    });
 }
 
 // Initialize the game when the page loads
