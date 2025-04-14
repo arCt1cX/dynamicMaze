@@ -96,19 +96,29 @@ body {
 }
 
 #game-board.flash {
-    box-shadow: 0 0 30px rgba(76, 175, 80, 0.8);
-    animation: boardFlash 0.3s ease;
+    box-shadow: 0 0 40px rgba(76, 175, 80, 0.9);
+    animation: boardFlash 0.5s ease;
 }
 
 @keyframes boardFlash {
     0% {
         background-color: #2a2a2a;
     }
-    50% {
+    20% {
         background-color: #4CAF50;
     }
-    100% {
+    40% {
         background-color: #2a2a2a;
+    }
+    60% {
+        background-color: #3f51b5;
+    }
+    80% {
+        background-color: #2a2a2a;
+    }
+    100% {
+        background-color: #4CAF50;
+        filter: contrast(1.2);
     }
 }
 
@@ -126,19 +136,31 @@ body {
 
 .wall-shifting {
     animation: wallShift 0.5s ease;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    z-index: 2;
 }
 
 @keyframes wallShift {
     0% {
-        transform: scale(0.9);
-        opacity: 0.7;
+        transform: scale(0.8) rotate(-5deg);
+        opacity: 0.6;
+    }
+    25% {
+        transform: scale(1.15) rotate(5deg);
+        opacity: 0.8;
     }
     50% {
-        transform: scale(1.1);
+        transform: scale(0.9) rotate(-3deg);
         opacity: 1;
+        filter: brightness(1.5);
+    }
+    75% {
+        transform: scale(1.05) rotate(3deg);
+        filter: brightness(1.2);
     }
     100% {
-        transform: scale(1);
+        transform: scale(1) rotate(0);
+        filter: brightness(1);
     }
 }
 

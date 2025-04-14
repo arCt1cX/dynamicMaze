@@ -1,8 +1,8 @@
 // Game configuration
 const config = {
     gridSize: { width: 17, height: 15 },
-    initialTime: 15,
-    timeDecrement: 0.05,
+    initialTime: 30,
+    timeDecrement: 0.03,
     minDynamicWallChance: 0.2,
     maxDynamicWallChance: 0.4,
     obstacleChance: 0.05,
@@ -95,10 +95,10 @@ function initEventListeners() {
 
 // Calculate time for current level (increases by 2 seconds every 3 levels)
 function getTimeForLevel(level) {
-    // Base time is 10 seconds
-    // Add 2 seconds for every 3 levels
+    // Base time is the initialTime from config (30 seconds)
+    // Add 2 seconds for every 3 levels, capped at 60 seconds
     const extraTime = Math.floor((level - 1) / 3) * 2;
-    return config.initialTime + extraTime;
+    return Math.min(config.initialTime + extraTime, 60);
 }
 
 // Start the game
@@ -541,34 +541,37 @@ function shiftMaze() {
     // Play shift sound
     playSound(shiftSound);
     
-    // Add a visual flash effect to the game board
+    // Add a more dramatic visual flash effect to the game board
     gameBoard.classList.add('flash');
     setTimeout(() => {
         gameBoard.classList.remove('flash');
-    }, 300);
+    }, 500);
     
     // Choose a shift type based on level and randomness
     const shiftType = Math.random();
     
-    if (shiftType < 0.4) {
-        // Wall flips (original behavior - 40% chance)
+    if (shiftType < 0.3) {
+        // Wall flips (30% chance)
         performWallFlips();
-    } else if (shiftType < 0.7) {
-        // Shift a corridor - 30% chance
+    } else if (shiftType < 0.6) {
+        // Shift corridors (30% chance)
         shiftCorridor();
-    } else {
-        // Add random obstacles - 30% chance
+    } else if (shiftType < 0.85) {
+        // Add random obstacles (25% chance)
         addRandomObstacles();
+    } else {
+        // Major shift - completely reorganize section (15% chance)
+        performMajorShift();
     }
     
     // Ensure there's still a path to the exit after shifting
     createPathToExit();
 }
 
-// Performs the original wall-flipping behavior
+// Performs the wall-flipping behavior with more intensity
 function performWallFlips() {
-    // Number of walls to shift (based on level)
-    const shiftsCount = Math.min(5 + gameState.level, 15);
+    // Number of walls to shift (increased with level)
+    const shiftsCount = Math.min(7 + gameState.level, 20);
     
     for (let i = 0; i < shiftsCount; i++) {
         // Pick a random location (not on player, enemy, or exit)
@@ -612,130 +615,229 @@ function performWallFlips() {
     }
 }
 
-// Shifts an entire corridor in the maze
-function shiftCorridor() {
-    // Decide if shifting a row or column
-    const isRow = Math.random() < 0.5;
+// NEW: Create a major shift that dramatically reorganizes a section of the maze
+function performMajorShift() {
+    // Choose a quadrant to remodel (avoid player, enemy, exit areas)
+    let quadrantX, quadrantY;
+    let validQuadrant = false;
     
-    // Select a random row/column to shift (avoiding borders)
-    const index = Math.floor(Math.random() * (config.gridSize.height - 4)) + 2;
+    // Keep trying until we find a valid quadrant 
+    while (!validQuadrant) {
+        // Randomly select a quadrant
+        quadrantX = Math.random() < 0.5 ? 0 : 1;
+        quadrantY = Math.random() < 0.5 ? 0 : 1;
+        
+        // Calculate quadrant boundaries
+        const startRow = quadrantY === 0 ? 1 : Math.floor(config.gridSize.height / 2);
+        const endRow = quadrantY === 0 ? Math.floor(config.gridSize.height / 2) : config.gridSize.height - 1;
+        const startCol = quadrantX === 0 ? 1 : Math.floor(config.gridSize.width / 2);
+        const endCol = quadrantX === 0 ? Math.floor(config.gridSize.width / 2) : config.gridSize.width - 1;
+        
+        // Check if player, enemy or exit is in this quadrant
+        const playerInQuadrant = 
+            gameState.playerPosition.row >= startRow && gameState.playerPosition.row <= endRow &&
+            gameState.playerPosition.col >= startCol && gameState.playerPosition.col <= endCol;
+            
+        const enemyInQuadrant = 
+            gameState.enemyPosition.row >= startRow && gameState.enemyPosition.row <= endRow &&
+            gameState.enemyPosition.col >= startCol && gameState.enemyPosition.col <= endCol;
+            
+        const exitInQuadrant = 
+            gameState.exitPosition.row >= startRow && gameState.exitPosition.row <= endRow &&
+            gameState.exitPosition.col >= startCol && gameState.exitPosition.col <= endCol;
+            
+        validQuadrant = !playerInQuadrant && !enemyInQuadrant && !exitInQuadrant;
+    }
     
-    // Determine shift direction (positive or negative)
-    const shiftDirection = Math.random() < 0.5 ? 1 : -1;
+    // Calculate quadrant boundaries
+    const startRow = quadrantY === 0 ? 1 : Math.floor(config.gridSize.height / 2);
+    const endRow = quadrantY === 0 ? Math.floor(config.gridSize.height / 2) : config.gridSize.height - 1;
+    const startCol = quadrantX === 0 ? 1 : Math.floor(config.gridSize.width / 2);
+    const endCol = quadrantX === 0 ? Math.floor(config.gridSize.width / 2) : config.gridSize.width - 1;
     
-    // Store the cells that will be shifted
-    const originalCells = [];
+    // Choose a pattern for this quadrant (0: checkerboard, 1: zigzag, 2: spiral)
+    const pattern = Math.floor(Math.random() * 3);
     
-    // Don't shift cells with player, enemy, exit, or obstacles
-    const skipCells = [];
-    
-    // Create a map of obstacles to preserve
-    const obstaclePositions = new Set();
-    
-    // Collect data for shifting
-    if (isRow) {
-        // Get original row data
-        for (let col = 1; col < config.gridSize.width - 1; col++) {
-            // Track obstacles
-            if (gameState.grid[index][col] === 'obstacle') {
-                obstaclePositions.add(`${index},${col}`);
+    // Apply the pattern to the quadrant
+    for (let row = startRow; row < endRow; row++) {
+        for (let col = startCol; col < endCol; col++) {
+            // Skip obstacles and keep them in place
+            if (gameState.grid[row][col] === 'obstacle') continue;
+            
+            let newCellType;
+            
+            switch (pattern) {
+                case 0: // Checkerboard pattern
+                    newCellType = (row + col) % 2 === 0 ? 'wall' : 'path';
+                    break;
+                    
+                case 1: // Zigzag pattern
+                    newCellType = (row % 3 === 0 && col % 2 === 0) || 
+                                 (row % 3 === 1 && col % 2 === 1) ? 'wall' : 'path';
+                    break;
+                    
+                case 2: // Spiral-like pattern
+                    const distFromCenter = Math.abs((row - startRow) - (endRow - startRow) / 2) + 
+                                          Math.abs((col - startCol) - (endCol - startCol) / 2);
+                    newCellType = distFromCenter % 2 === 0 ? 'wall' : 'path';
+                    break;
             }
             
-            originalCells.push({
-                row: index,
-                col: col,
-                type: gameState.grid[index][col]
-            });
+            // Apply the cell type and add animation
+            const cell = getCellElement(row, col);
+            const currentCellType = gameState.grid[row][col];
             
-            // Check if cell contains player, enemy, exit, or obstacle
-            const isPlayer = index === gameState.playerPosition.row && col === gameState.playerPosition.col;
-            const isEnemy = index === gameState.enemyPosition.row && col === gameState.enemyPosition.col;
-            const isExit = index === gameState.exitPosition.row && col === gameState.exitPosition.col;
-            const isObstacle = gameState.grid[index][col] === 'obstacle';
-            
-            if (isPlayer || isEnemy || isExit || isObstacle) {
-                skipCells.push(col);
-            }
-        }
-    } else {
-        // Get original column data
-        for (let row = 1; row < config.gridSize.height - 1; row++) {
-            // Track obstacles
-            if (gameState.grid[row][index] === 'obstacle') {
-                obstaclePositions.add(`${row},${index}`);
-            }
-            
-            originalCells.push({
-                row: row,
-                col: index,
-                type: gameState.grid[row][index]
-            });
-            
-            // Check if cell contains player, enemy, exit, or obstacle
-            const isPlayer = row === gameState.playerPosition.row && index === gameState.playerPosition.col;
-            const isEnemy = row === gameState.enemyPosition.row && index === gameState.enemyPosition.col;
-            const isExit = row === gameState.exitPosition.row && index === gameState.exitPosition.col;
-            const isObstacle = gameState.grid[row][index] === 'obstacle';
-            
-            if (isPlayer || isEnemy || isExit || isObstacle) {
-                skipCells.push(row);
+            if (currentCellType !== newCellType) {
+                gameState.grid[row][col] = newCellType;
+                
+                if (newCellType === 'wall') {
+                    cell.classList.add('wall');
+                } else {
+                    cell.classList.remove('wall');
+                }
+                
+                cell.classList.add('wall-shifting');
+                
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    cell.classList.remove('wall-shifting');
+                }, 500);
             }
         }
     }
+}
+
+// Shifts corridors in the maze
+function shiftCorridor() {
+    // Decide if we'll shift multiple corridors (more likely in higher levels)
+    const multipleShifts = Math.random() < 0.2 + (gameState.level * 0.05);
+    const shiftsCount = multipleShifts ? 2 : 1;
     
-    // Apply the shift
-    for (let i = 0; i < originalCells.length; i++) {
-        const cell = originalCells[i];
+    for (let shift = 0; shift < shiftsCount; shift++) {
+        // Decide if shifting a row or column
+        const isRow = Math.random() < 0.5;
         
-        // Skip obstacles - they remain in place
-        if (cell.type === 'obstacle') continue;
+        // Select a random row/column to shift (avoiding borders)
+        const index = Math.floor(Math.random() * (isRow ? config.gridSize.height - 4 : config.gridSize.width - 4)) + 2;
         
-        // Determine the new position
-        let newPos;
+        // Determine shift direction (positive or negative)
+        const shiftDirection = Math.random() < 0.5 ? 1 : -1;
+        
+        // Determine shift distance (can be more dramatic in higher levels)
+        const shiftDistance = Math.random() < 0.3 + (gameState.level * 0.03) ? 2 : 1;
+        
+        // Store the cells that will be shifted
+        const originalCells = [];
+        
+        // Don't shift cells with player, enemy, exit, or obstacles
+        const skipCells = [];
+        
+        // Create a map of obstacles to preserve
+        const obstaclePositions = new Set();
+        
+        // Collect data for shifting
         if (isRow) {
-            newPos = (cell.col + shiftDirection) % (config.gridSize.width - 2);
-            if (newPos === 0) newPos = config.gridSize.width - 2;
-            if (newPos < 1) newPos = config.gridSize.width - 2 + newPos;
-            
-            // Skip if cell contains special elements or if target position has an obstacle
-            if (skipCells.includes(cell.col) || skipCells.includes(newPos) || 
-                obstaclePositions.has(`${cell.row},${newPos}`)) continue;
-            
-            // Apply the shift
-            gameState.grid[cell.row][newPos] = cell.type;
-            
-            // Update cell appearance
-            const domCell = getCellElement(cell.row, newPos);
-            domCell.className = 'cell';
-            if (cell.type === 'wall') domCell.classList.add('wall');
-            
-            // Add shifting animation
-            domCell.classList.add('wall-shifting');
-            setTimeout(() => {
-                domCell.classList.remove('wall-shifting');
-            }, 500);
+            // Get original row data
+            for (let col = 1; col < config.gridSize.width - 1; col++) {
+                // Track obstacles
+                if (gameState.grid[index][col] === 'obstacle') {
+                    obstaclePositions.add(`${index},${col}`);
+                }
+                
+                originalCells.push({
+                    row: index,
+                    col: col,
+                    type: gameState.grid[index][col]
+                });
+                
+                // Check if cell contains player, enemy, exit, or obstacle
+                const isPlayer = index === gameState.playerPosition.row && col === gameState.playerPosition.col;
+                const isEnemy = index === gameState.enemyPosition.row && col === gameState.enemyPosition.col;
+                const isExit = index === gameState.exitPosition.row && col === gameState.exitPosition.col;
+                const isObstacle = gameState.grid[index][col] === 'obstacle';
+                
+                if (isPlayer || isEnemy || isExit || isObstacle) {
+                    skipCells.push(col);
+                }
+            }
         } else {
-            newPos = (cell.row + shiftDirection) % (config.gridSize.height - 2);
-            if (newPos === 0) newPos = config.gridSize.height - 2;
-            if (newPos < 1) newPos = config.gridSize.height - 2 + newPos;
+            // Get original column data
+            for (let row = 1; row < config.gridSize.height - 1; row++) {
+                // Track obstacles
+                if (gameState.grid[row][index] === 'obstacle') {
+                    obstaclePositions.add(`${row},${index}`);
+                }
+                
+                originalCells.push({
+                    row: row,
+                    col: index,
+                    type: gameState.grid[row][index]
+                });
+                
+                // Check if cell contains player, enemy, exit, or obstacle
+                const isPlayer = row === gameState.playerPosition.row && index === gameState.playerPosition.col;
+                const isEnemy = row === gameState.enemyPosition.row && index === gameState.enemyPosition.col;
+                const isExit = row === gameState.exitPosition.row && index === gameState.exitPosition.col;
+                const isObstacle = gameState.grid[row][index] === 'obstacle';
+                
+                if (isPlayer || isEnemy || isExit || isObstacle) {
+                    skipCells.push(row);
+                }
+            }
+        }
+        
+        // Apply the shift
+        for (let i = 0; i < originalCells.length; i++) {
+            const cell = originalCells[i];
             
-            // Skip if cell contains special elements or if target position has an obstacle
-            if (skipCells.includes(cell.row) || skipCells.includes(newPos) || 
-                obstaclePositions.has(`${newPos},${cell.col}`)) continue;
+            // Skip obstacles - they remain in place
+            if (cell.type === 'obstacle') continue;
             
-            // Apply the shift
-            gameState.grid[newPos][cell.col] = cell.type;
-            
-            // Update cell appearance
-            const domCell = getCellElement(newPos, cell.col);
-            domCell.className = 'cell';
-            if (cell.type === 'wall') domCell.classList.add('wall');
-            
-            // Add shifting animation
-            domCell.classList.add('wall-shifting');
-            setTimeout(() => {
-                domCell.classList.remove('wall-shifting');
-            }, 500);
+            // Determine the new position
+            let newPos;
+            if (isRow) {
+                newPos = (cell.col + shiftDirection * shiftDistance) % (config.gridSize.width - 2);
+                if (newPos <= 0) newPos = config.gridSize.width - 2 + newPos;
+                
+                // Skip if cell contains special elements or if target position has an obstacle
+                if (skipCells.includes(cell.col) || skipCells.includes(newPos) || 
+                    obstaclePositions.has(`${cell.row},${newPos}`)) continue;
+                
+                // Apply the shift
+                gameState.grid[cell.row][newPos] = cell.type;
+                
+                // Update cell appearance
+                const domCell = getCellElement(cell.row, newPos);
+                domCell.className = 'cell';
+                if (cell.type === 'wall') domCell.classList.add('wall');
+                
+                // Add shifting animation
+                domCell.classList.add('wall-shifting');
+                setTimeout(() => {
+                    domCell.classList.remove('wall-shifting');
+                }, 500);
+            } else {
+                newPos = (cell.row + shiftDirection * shiftDistance) % (config.gridSize.height - 2);
+                if (newPos <= 0) newPos = config.gridSize.height - 2 + newPos;
+                
+                // Skip if cell contains special elements or if target position has an obstacle
+                if (skipCells.includes(cell.row) || skipCells.includes(newPos) || 
+                    obstaclePositions.has(`${newPos},${cell.col}`)) continue;
+                
+                // Apply the shift
+                gameState.grid[newPos][cell.col] = cell.type;
+                
+                // Update cell appearance
+                const domCell = getCellElement(newPos, cell.col);
+                domCell.className = 'cell';
+                if (cell.type === 'wall') domCell.classList.add('wall');
+                
+                // Add shifting animation
+                domCell.classList.add('wall-shifting');
+                setTimeout(() => {
+                    domCell.classList.remove('wall-shifting');
+                }, 500);
+            }
         }
     }
 }
@@ -743,63 +845,116 @@ function shiftCorridor() {
 // Adds random obstacles and clear paths 
 function addRandomObstacles() {
     // Number of features to add (obstacles + paths)
-    const featureCount = Math.min(3 + Math.floor(gameState.level / 2), 8);
+    const featureCount = Math.min(4 + Math.floor(gameState.level / 2), 10);
     
-    for (let i = 0; i < featureCount; i++) {
-        // Pick a random location (not on player, enemy, or exit)
-        let row, col;
-        let validLocation = false;
+    // Decide if we're making a dramatic pattern (more likely in higher levels)
+    const dramaticPattern = Math.random() < 0.3 + (gameState.level * 0.03);
+    
+    if (dramaticPattern) {
+        // Create a dramatic pattern (line of obstacles or line of paths)
+        const isHorizontal = Math.random() < 0.5;
+        const isObstacleLine = Math.random() < 0.4; // 40% chance for obstacle line, otherwise path line
         
-        while (!validLocation) {
-            row = Math.floor(Math.random() * (config.gridSize.height - 4)) + 2;
-            col = Math.floor(Math.random() * (config.gridSize.width - 4)) + 2;
+        // Pick a random row or column for the line
+        const linePos = isHorizontal 
+            ? Math.floor(Math.random() * (config.gridSize.height - 6)) + 3 
+            : Math.floor(Math.random() * (config.gridSize.width - 6)) + 3;
             
+        // Length of the line (don't go all the way across)
+        const startPos = Math.floor(Math.random() * 3) + 2; // Start at position 2-4
+        const endPos = (isHorizontal ? config.gridSize.width : config.gridSize.height) - startPos;
+        
+        // Create the line
+        for (let i = startPos; i < endPos; i++) {
+            const row = isHorizontal ? linePos : i;
+            const col = isHorizontal ? i : linePos;
+            
+            // Skip if this cell has player, enemy, or exit
             const isPlayer = row === gameState.playerPosition.row && col === gameState.playerPosition.col;
             const isEnemy = row === gameState.enemyPosition.row && col === gameState.enemyPosition.col;
             const isExit = row === gameState.exitPosition.row && col === gameState.exitPosition.col;
             
-            validLocation = !isPlayer && !isEnemy && !isExit;
+            if (!isPlayer && !isEnemy && !isExit) {
+                // Apply cell type based on line type
+                if (isObstacleLine) {
+                    gameState.grid[row][col] = 'obstacle';
+                    const cell = getCellElement(row, col);
+                    cell.className = 'cell obstacle';
+                } else {
+                    gameState.grid[row][col] = 'path';
+                    const cell = getCellElement(row, col);
+                    cell.className = 'cell';
+                }
+                
+                // Add animation
+                const cell = getCellElement(row, col);
+                cell.classList.add('wall-shifting');
+                
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    cell.classList.remove('wall-shifting');
+                }, 500);
+            }
         }
-        
-        // Decide what type of feature to add
-        if (Math.random() < 0.3) {
-            // Add obstacle
-            gameState.grid[row][col] = 'obstacle';
-            const cell = getCellElement(row, col);
-            cell.className = 'cell obstacle';
-            cell.classList.add('wall-shifting');
+    } else {
+        // Standard random features (enhanced version)
+        for (let i = 0; i < featureCount; i++) {
+            // Pick a random location (not on player, enemy, or exit)
+            let row, col;
+            let validLocation = false;
             
-            // Remove animation class after animation completes
-            setTimeout(() => {
-                cell.classList.remove('wall-shifting');
-            }, 500);
-        } else {
-            // Create a small path (clear a small area)
-            const pathSize = Math.floor(Math.random() * 2) + 2; // 2-3 cells
+            while (!validLocation) {
+                row = Math.floor(Math.random() * (config.gridSize.height - 4)) + 2;
+                col = Math.floor(Math.random() * (config.gridSize.width - 4)) + 2;
+                
+                const isPlayer = row === gameState.playerPosition.row && col === gameState.playerPosition.col;
+                const isEnemy = row === gameState.enemyPosition.row && col === gameState.enemyPosition.col;
+                const isExit = row === gameState.exitPosition.row && col === gameState.exitPosition.col;
+                
+                validLocation = !isPlayer && !isEnemy && !isExit;
+            }
             
-            for (let r = -1; r <= 1; r++) {
-                for (let c = -1; c <= 1; c++) {
-                    if (Math.abs(r) + Math.abs(c) <= 1) { // + shape
-                        const newRow = row + r;
-                        const newCol = col + c;
-                        
-                        if (newRow > 0 && newRow < config.gridSize.height - 1 && 
-                            newCol > 0 && newCol < config.gridSize.width - 1) {
+            // Decide what type of feature to add
+            if (Math.random() < 0.4) { // 40% chance - higher than before
+                // Add obstacle
+                gameState.grid[row][col] = 'obstacle';
+                const cell = getCellElement(row, col);
+                cell.className = 'cell obstacle';
+                cell.classList.add('wall-shifting');
+                
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    cell.classList.remove('wall-shifting');
+                }, 500);
+            } else {
+                // Create a larger path (clear a larger area in a plus shape)
+                const pathSize = Math.random() < 0.5 ? 2 : 3; // 2-3 cell radius
+                
+                for (let r = -pathSize; r <= pathSize; r++) {
+                    for (let c = -pathSize; c <= pathSize; c++) {
+                        // Create plus shape (Manhattan distance ≤ pathSize)
+                        if (Math.abs(r) + Math.abs(c) <= pathSize) {
+                            const newRow = row + r;
+                            const newCol = col + c;
                             
-                            const isPlayerHere = newRow === gameState.playerPosition.row && newCol === gameState.playerPosition.col;
-                            const isEnemyHere = newRow === gameState.enemyPosition.row && newCol === gameState.enemyPosition.col;
-                            const isExitHere = newRow === gameState.exitPosition.row && newCol === gameState.exitPosition.col;
-                            
-                            if (!isPlayerHere && !isEnemyHere && !isExitHere) {
-                                gameState.grid[newRow][newCol] = 'path';
-                                const cell = getCellElement(newRow, newCol);
-                                cell.className = 'cell';
-                                cell.classList.add('wall-shifting');
+                            if (newRow > 0 && newRow < config.gridSize.height - 1 && 
+                                newCol > 0 && newCol < config.gridSize.width - 1) {
                                 
-                                // Remove animation class after animation completes
-                                setTimeout(() => {
-                                    cell.classList.remove('wall-shifting');
-                                }, 500);
+                                const isPlayerHere = newRow === gameState.playerPosition.row && newCol === gameState.playerPosition.col;
+                                const isEnemyHere = newRow === gameState.enemyPosition.row && newCol === gameState.enemyPosition.col;
+                                const isExitHere = newRow === gameState.exitPosition.row && newCol === gameState.exitPosition.col;
+                                
+                                if (!isPlayerHere && !isEnemyHere && !isExitHere) {
+                                    gameState.grid[newRow][newCol] = 'path';
+                                    const cell = getCellElement(newRow, newCol);
+                                    cell.className = 'cell';
+                                    cell.classList.add('wall-shifting');
+                                    
+                                    // Remove animation class after animation completes
+                                    setTimeout(() => {
+                                        cell.classList.remove('wall-shifting');
+                                    }, 500);
+                                }
                             }
                         }
                     }
