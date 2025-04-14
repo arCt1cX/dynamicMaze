@@ -11,8 +11,10 @@
         <div class="header">
             <h1>Dynamic Maze</h1>
             <div class="stats">
-                <div class="timer">Time: <span id="time">60</span>s</div>
+                <div class="timer">Time: <span id="time">15</span>s</div>
                 <div class="level">Level: <span id="level">1</span></div>
+                <div class="score">Score: <span id="score">0</span></div>
+                <button id="sound-toggle" class="sound-on" title="Toggle Sound">🔊</button>
             </div>
         </div>
         
@@ -23,17 +25,28 @@
                 <p>Use arrow keys or WASD to move. Reach the exit before time runs out!</p>
                 <p>Beware of the pursuing AI and the shifting maze walls.</p>
             </div>
-            <button id="start-button">Start Game</button>
         </div>
+    </div>
+    
+    <div id="start-overlay" class="start-overlay">
+        <button id="start-button">Start Game</button>
     </div>
     
     <div id="game-over" class="modal">
         <div class="modal-content">
             <h2>Game Over!</h2>
             <p id="game-over-message"></p>
+            <p>Final Score: <span id="final-score">0</span></p>
             <button id="restart-button">Play Again</button>
         </div>
     </div>
+
+    <!-- Audio elements for sound effects -->
+    <audio id="move-sound" src="https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3" preload="auto"></audio>
+    <audio id="shift-sound" src="https://assets.mixkit.co/active_storage/sfx/146/146-preview.mp3" preload="auto"></audio>
+    <audio id="level-complete-sound" src="https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3" preload="auto"></audio>
+    <audio id="game-over-sound" src="https://assets.mixkit.co/active_storage/sfx/566/566-preview.mp3" preload="auto"></audio>
+    <audio id="exit-reached-sound" src="https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3" preload="auto"></audio>
 
     <script src="script.js"></script>
 </body>
