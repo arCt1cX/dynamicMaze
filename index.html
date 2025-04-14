@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dynamic Maze</title>
     <link rel="stylesheet" href="./style.css">
 </head>
@@ -34,10 +34,19 @@
     
     <div id="game-over" class="modal">
         <div class="modal-content">
-            <h2>Game Over!</h2>
-            <p id="game-over-message"></p>
+            <h2>Game Over</h2>
+            <p id="game-over-message">You were trapped in the shifting maze.</p>
             <p>Final Score: <span id="final-score">0</span></p>
-            <button id="restart-button">Play Again</button>
+            <button id="restart-button">Try Again</button>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <div id="joystick-area">
+            <div id="joystick-base">
+                <div id="joystick-thumb"></div>
+            </div>
         </div>
     </div>
 

@@ -83,6 +83,14 @@ function initEventListeners() {
     restartButton.addEventListener('click', restartGame);
     document.addEventListener('keydown', handleKeyPress);
     soundToggle.addEventListener('click', toggleSound);
+    
+    // Check if this is a touch device and show/hide mobile controls accordingly
+    if (isTouchDevice()) {
+        document.getElementById('mobile-controls').style.display = 'block';
+    }
+    
+    // Initialize touch controls for mobile
+    initTouchControls();
 }
 
 // Calculate time for current level (increases by 2 seconds every 3 levels)
@@ -860,6 +868,174 @@ function placeEnemyInCorner() {
     
     // Place the enemy
     placeEnemy(corner.row, corner.col);
+}
+
+// Mobile touch controls
+function initTouchControls() {
+    const joystickBase = document.getElementById('joystick-base');
+    const joystickThumb = document.getElementById('joystick-thumb');
+    
+    if (!joystickBase || !joystickThumb) return;
+    
+    let isDragging = false;
+    let centerX, centerY;
+    let lastDirection = null;
+    let joystickTimer = null;
+    
+    // Calculate base center position
+    function updateJoystickCenter() {
+        const rect = joystickBase.getBoundingClientRect();
+        centerX = rect.left + rect.width / 2;
+        centerY = rect.top + rect.height / 2;
+        
+        // Reset thumb position to center
+        joystickThumb.style.left = '50%';
+        joystickThumb.style.top = '50%';
+        joystickThumb.style.transform = 'translate(-50%, -50%)';
+    }
+    
+    function handleStart(e) {
+        isDragging = true;
+        updateJoystickCenter();
+        handleMove(e);
+    }
+    
+    function handleMove(e) {
+        if (!isDragging) return;
+        
+        // Get touch position or mouse position
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        
+        // Calculate distance from center
+        const deltaX = clientX - centerX;
+        const deltaY = clientY - centerY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        // Limit distance to joystick radius
+        const maxDistance = joystickBase.offsetWidth / 2;
+        const limitedDistance = Math.min(distance, maxDistance);
+        
+        // Calculate angle
+        const angle = Math.atan2(deltaY, deltaX);
+        
+        // Calculate new position
+        const limitedX = centerX + limitedDistance * Math.cos(angle);
+        const limitedY = centerY + limitedDistance * Math.sin(angle);
+        
+        // Update thumb position relative to joystick base
+        const relX = limitedX - joystickBase.getBoundingClientRect().left;
+        const relY = limitedY - joystickBase.getBoundingClientRect().top;
+        
+        joystickThumb.style.left = relX + 'px';
+        joystickThumb.style.top = relY + 'px';
+        joystickThumb.style.transform = 'translate(-50%, -50%)';
+        
+        // Determine movement direction
+        determineDirection(deltaX, deltaY, limitedDistance / maxDistance);
+    }
+    
+    function handleEnd() {
+        if (!isDragging) return;
+        
+        isDragging = false;
+        lastDirection = null;
+        
+        // Reset thumb position
+        joystickThumb.style.left = '50%';
+        joystickThumb.style.top = '50%';
+        joystickThumb.style.transform = 'translate(-50%, -50%)';
+        
+        // Clear continuous movement timer
+        if (joystickTimer) {
+            clearInterval(joystickTimer);
+            joystickTimer = null;
+        }
+    }
+    
+    function determineDirection(deltaX, deltaY, intensity) {
+        // Need minimum intensity to trigger movement
+        if (intensity < 0.3) return;
+        
+        // Determine primary direction
+        let direction;
+        
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            // Horizontal movement
+            direction = deltaX > 0 ? 'right' : 'left';
+        } else {
+            // Vertical movement
+            direction = deltaY > 0 ? 'down' : 'up';
+        }
+        
+        // Only trigger if direction changed
+        if (direction !== lastDirection) {
+            lastDirection = direction;
+            
+            // Clear existing interval
+            if (joystickTimer) {
+                clearInterval(joystickTimer);
+            }
+            
+            // Move immediately
+            moveFromJoystick(direction);
+            
+            // Set up continuous movement if joystick is held
+            const moveInterval = 300 - Math.min(intensity * 200, 150); // Faster interval with higher intensity
+            joystickTimer = setInterval(() => {
+                moveFromJoystick(direction);
+            }, moveInterval);
+        }
+    }
+    
+    function moveFromJoystick(direction) {
+        if (!gameState.isGameStarted || gameState.isGameOver) return;
+        
+        let moveDirection;
+        
+        switch (direction) {
+            case 'up':
+                moveDirection = { row: -1, col: 0 };
+                break;
+            case 'down':
+                moveDirection = { row: 1, col: 0 };
+                break;
+            case 'left':
+                moveDirection = { row: 0, col: -1 };
+                break;
+            case 'right':
+                moveDirection = { row: 0, col: 1 };
+                break;
+            default:
+                return;
+        }
+        
+        movePlayer(moveDirection);
+    }
+    
+    // Add event listeners for both touch and mouse
+    joystickBase.addEventListener('touchstart', handleStart);
+    joystickBase.addEventListener('touchmove', handleMove);
+    joystickBase.addEventListener('touchend', handleEnd);
+    
+    // For testing on desktop
+    joystickBase.addEventListener('mousedown', handleStart);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    
+    // Update center position on resize or orientation change
+    window.addEventListener('resize', updateJoystickCenter);
+    window.addEventListener('orientationchange', updateJoystickCenter);
+    
+    // Initialize center position
+    updateJoystickCenter();
+}
+
+// Detect if device supports touch
+function isTouchDevice() {
+    return (('ontouchstart' in window) ||
+           (navigator.maxTouchPoints > 0) ||
+           (navigator.msMaxTouchPoints > 0));
 }
 
 // Initialize the game when the page loads

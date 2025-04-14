@@ -299,4 +299,72 @@ button:hover {
     cursor: pointer;
     box-shadow: 0 0 15px rgba(76, 175, 80, 0.7);
     transition: all 0.3s ease;
+}
+
+/* Mobile Controls */
+#mobile-controls {
+    display: none;
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 1000;
+}
+
+#joystick-area {
+    width: 150px;
+    height: 150px;
+    position: relative;
+}
+
+#joystick-base {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid #444;
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+#joystick-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #6a3fc8;
+    box-shadow: 0 0 10px rgba(167, 104, 255, 0.8);
+    position: absolute;
+    transition: transform 0.05s ease;
+}
+
+/* Media Queries for Mobile */
+@media (max-width: 768px) {
+    .game-container {
+        width: 100%;
+        padding: 10px;
+        max-width: none;
+    }
+    
+    #game-board {
+        width: 100%;
+        height: 60vh;
+        max-width: none;
+        max-height: none;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .controls button {
+        padding: 8px 16px;
+    }
+    
+    #mobile-controls {
+        display: block;
+    }
 } 
