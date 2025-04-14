@@ -1,6 +1,6 @@
 // Game configuration
 const config = {
-    gridSize: 15,
+    gridSize: { width: 17, height: 15 },
     initialTime: 15,
     timeDecrement: 0.05,
     minDynamicWallChance: 0.2,
@@ -136,15 +136,15 @@ function updateDisplay() {
 // Generate the maze
 function generateMaze() {
     gameBoard.innerHTML = '';
-    gameBoard.style.gridTemplateColumns = `repeat(${config.gridSize}, 1fr)`;
-    gameBoard.style.gridTemplateRows = `repeat(${config.gridSize}, 1fr)`;
+    gameBoard.style.gridTemplateColumns = `repeat(${config.gridSize.width}, 1fr)`;
+    gameBoard.style.gridTemplateRows = `repeat(${config.gridSize.height}, 1fr)`;
     
     gameState.grid = [];
     
     // Create empty grid
-    for (let row = 0; row < config.gridSize; row++) {
+    for (let row = 0; row < config.gridSize.height; row++) {
         gameState.grid[row] = [];
-        for (let col = 0; col < config.gridSize; col++) {
+        for (let col = 0; col < config.gridSize.width; col++) {
             const cell = document.createElement('div');
             cell.classList.add('cell');
             cell.dataset.row = row;
@@ -155,7 +155,7 @@ function generateMaze() {
             let cellType = 'path';
             
             // Border walls
-            if (row === 0 || row === config.gridSize - 1 || col === 0 || col === config.gridSize - 1) {
+            if (row === 0 || row === config.gridSize.height - 1 || col === 0 || col === config.gridSize.width - 1) {
                 cellType = 'wall';
             } 
             // Random walls (more walls at higher levels)
@@ -180,7 +180,7 @@ function generateMaze() {
     placePlayer(1, 1);
     
     // Place exit at bottom right
-    placeExit(config.gridSize - 2, config.gridSize - 2);
+    placeExit(config.gridSize.height - 2, config.gridSize.width - 2);
     
     // Place enemy in one of the other corners (not where player or exit are)
     placeEnemyInCorner();
@@ -234,7 +234,7 @@ function placePlayer(row, col) {
 
 // Place exit on the grid
 function placeExit(row, col) {
-    if (row >= 0 && row < config.gridSize && col >= 0 && col < config.gridSize) {
+    if (row >= 0 && row < config.gridSize.height && col >= 0 && col < config.gridSize.width) {
         gameState.exitPosition = { row, col };
         gameState.grid[row][col] = 'exit';
         
@@ -272,9 +272,9 @@ function getCellElement(row, col) {
 function isValidPosition(row, col) {
     return (
         row >= 0 && 
-        row < config.gridSize && 
+        row < config.gridSize.height && 
         col >= 0 && 
-        col < config.gridSize && 
+        col < config.gridSize.width && 
         gameState.grid[row][col] !== 'wall'
     );
 }
@@ -299,7 +299,7 @@ function createPathToExit() {
         // Skip if there's an obstacle (find an alternate path)
         if (gameState.grid[currentRow][currentCol] === 'obstacle') {
             // Try to go around the obstacle horizontally
-            if (currentCol + 1 < config.gridSize - 1 && gameState.grid[currentRow - 1][currentCol + 1] !== 'obstacle') {
+            if (currentCol + 1 < config.gridSize.width - 1 && gameState.grid[currentRow - 1][currentCol + 1] !== 'obstacle') {
                 // Go right first
                 currentCol++;
                 gameState.grid[currentRow - 1][currentCol] = 'path';
@@ -326,7 +326,7 @@ function createPathToExit() {
         // Skip if there's an obstacle (find an alternate path)
         if (gameState.grid[currentRow][currentCol] === 'obstacle') {
             // Try to go around the obstacle vertically
-            if (currentRow + 1 < config.gridSize - 1 && gameState.grid[currentRow + 1][currentCol - 1] !== 'obstacle') {
+            if (currentRow + 1 < config.gridSize.height - 1 && gameState.grid[currentRow + 1][currentCol - 1] !== 'obstacle') {
                 // Go down first
                 currentRow++;
                 gameState.grid[currentRow][currentCol - 1] = 'path';
@@ -523,12 +523,12 @@ function moveEnemy() {
         const newRow = enemyRow + dir.row;
         const newCol = enemyCol + dir.col;
         
-        if (isValidPosition(newRow, newCol) && gameState.grid[newRow][newCol] !== 'obstacle') {
-            placeEnemy(newRow, newCol);
-            
-            // Check if enemy caught the player
-            if (newRow === gameState.playerPosition.row && newCol === gameState.playerPosition.col) {
-                endGame('The creature caught you! Better luck next time.');
+    if (isValidPosition(newRow, newCol) && gameState.grid[newRow][newCol] !== 'obstacle') {
+        placeEnemy(newRow, newCol);
+        
+        // Check if enemy caught the player
+        if (newRow === gameState.playerPosition.row && newCol === gameState.playerPosition.col) {
+            endGame('The creature caught you! Better luck next time.');
             }
             
             return;
@@ -576,8 +576,8 @@ function performWallFlips() {
         let validLocation = false;
         
         while (!validLocation) {
-            row = Math.floor(Math.random() * (config.gridSize - 2)) + 1;
-            col = Math.floor(Math.random() * (config.gridSize - 2)) + 1;
+            row = Math.floor(Math.random() * (config.gridSize.height - 2)) + 1;
+            col = Math.floor(Math.random() * (config.gridSize.width - 2)) + 1;
             
             const isPlayer = row === gameState.playerPosition.row && col === gameState.playerPosition.col;
             const isEnemy = row === gameState.enemyPosition.row && col === gameState.enemyPosition.col;
@@ -618,7 +618,7 @@ function shiftCorridor() {
     const isRow = Math.random() < 0.5;
     
     // Select a random row/column to shift (avoiding borders)
-    const index = Math.floor(Math.random() * (config.gridSize - 4)) + 2;
+    const index = Math.floor(Math.random() * (config.gridSize.height - 4)) + 2;
     
     // Determine shift direction (positive or negative)
     const shiftDirection = Math.random() < 0.5 ? 1 : -1;
@@ -635,7 +635,7 @@ function shiftCorridor() {
     // Collect data for shifting
     if (isRow) {
         // Get original row data
-        for (let col = 1; col < config.gridSize - 1; col++) {
+        for (let col = 1; col < config.gridSize.width - 1; col++) {
             // Track obstacles
             if (gameState.grid[index][col] === 'obstacle') {
                 obstaclePositions.add(`${index},${col}`);
@@ -659,7 +659,7 @@ function shiftCorridor() {
         }
     } else {
         // Get original column data
-        for (let row = 1; row < config.gridSize - 1; row++) {
+        for (let row = 1; row < config.gridSize.height - 1; row++) {
             // Track obstacles
             if (gameState.grid[row][index] === 'obstacle') {
                 obstaclePositions.add(`${row},${index}`);
@@ -693,9 +693,9 @@ function shiftCorridor() {
         // Determine the new position
         let newPos;
         if (isRow) {
-            newPos = (cell.col + shiftDirection) % (config.gridSize - 2);
-            if (newPos === 0) newPos = config.gridSize - 2;
-            if (newPos < 1) newPos = config.gridSize - 2 + newPos;
+            newPos = (cell.col + shiftDirection) % (config.gridSize.width - 2);
+            if (newPos === 0) newPos = config.gridSize.width - 2;
+            if (newPos < 1) newPos = config.gridSize.width - 2 + newPos;
             
             // Skip if cell contains special elements or if target position has an obstacle
             if (skipCells.includes(cell.col) || skipCells.includes(newPos) || 
@@ -715,9 +715,9 @@ function shiftCorridor() {
                 domCell.classList.remove('wall-shifting');
             }, 500);
         } else {
-            newPos = (cell.row + shiftDirection) % (config.gridSize - 2);
-            if (newPos === 0) newPos = config.gridSize - 2;
-            if (newPos < 1) newPos = config.gridSize - 2 + newPos;
+            newPos = (cell.row + shiftDirection) % (config.gridSize.height - 2);
+            if (newPos === 0) newPos = config.gridSize.height - 2;
+            if (newPos < 1) newPos = config.gridSize.height - 2 + newPos;
             
             // Skip if cell contains special elements or if target position has an obstacle
             if (skipCells.includes(cell.row) || skipCells.includes(newPos) || 
@@ -751,8 +751,8 @@ function addRandomObstacles() {
         let validLocation = false;
         
         while (!validLocation) {
-            row = Math.floor(Math.random() * (config.gridSize - 4)) + 2;
-            col = Math.floor(Math.random() * (config.gridSize - 4)) + 2;
+            row = Math.floor(Math.random() * (config.gridSize.height - 4)) + 2;
+            col = Math.floor(Math.random() * (config.gridSize.width - 4)) + 2;
             
             const isPlayer = row === gameState.playerPosition.row && col === gameState.playerPosition.col;
             const isEnemy = row === gameState.enemyPosition.row && col === gameState.enemyPosition.col;
@@ -783,8 +783,8 @@ function addRandomObstacles() {
                         const newRow = row + r;
                         const newCol = col + c;
                         
-                        if (newRow > 0 && newRow < config.gridSize - 1 && 
-                            newCol > 0 && newCol < config.gridSize - 1) {
+                        if (newRow > 0 && newRow < config.gridSize.height - 1 && 
+                            newCol > 0 && newCol < config.gridSize.width - 1) {
                             
                             const isPlayerHere = newRow === gameState.playerPosition.row && newCol === gameState.playerPosition.col;
                             const isEnemyHere = newRow === gameState.enemyPosition.row && newCol === gameState.enemyPosition.col;
@@ -858,8 +858,8 @@ function checkExitReached(row, col) {
 function placeEnemyInCorner() {
     // Define the possible corners
     const corners = [
-        { row: 1, col: config.gridSize - 2 },  // top-right
-        { row: config.gridSize - 2, col: 1 }   // bottom-left
+        { row: 1, col: config.gridSize.width - 2 },  // top-right
+        { row: config.gridSize.height - 2, col: 1 }   // bottom-left
     ];
     
     // Choose a random corner
